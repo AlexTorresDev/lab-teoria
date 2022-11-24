@@ -55,7 +55,11 @@ class Signal(object):
         self.sampling_rate = rate
         self.duration = float(n)/rate
 
-        if data.dtype == np.dtype('int16'):
+        print(data.dtype)
+
+        if data.dtype == np.dtype('int32'):
+            normalizer = 524532768.0
+        elif data.dtype == np.dtype('int16'):
             normalizer = 32768.0
         elif data.dtype == np.dtype('int8'):
             normalizer = 256.0
