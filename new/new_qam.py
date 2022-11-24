@@ -1,17 +1,23 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from ModulationPy import QAMModem
 
-
+'''
+    This class is used to generate a QAM signal.
+'''
 class NewQam:
-
     QAM_signal = np.empty(0)
     modulate = np.empty(0)
     data = np.empty(0)
-    modem: QAMModem
 
-    def __init__(self, Nbits, fCarrier=50, fs=12000, baud=120):
-        self.Nbits = Nbits
+    def __init__(self, Nbits = 8, fCarrier=50, fs=12000, baud=120):
+        '''
+            Constructor para QAM
+            Nbits: number of bits
+            fCarrier: carrier frequency
+            fs: sampling frequency
+            baud: baud rate
+        '''
+        self.Nbits = int(Nbits)
         self.fCarrier = fCarrier
         self.fs = fs
         self.baud = baud
@@ -19,13 +25,59 @@ class NewQam:
         self.N = Nbits * self.Ns
         self.t = np.r_[0.0:self.N] / fs
 
-        self.modem = QAMModem(self.Nbits,
-                              soft_decision=False,
-                              bin_output=False)
+        self.m = [i for i in range(self.Nbits)]
+        self.s = self.__qam_symbols()
+        self.code_book = self.__create_constellation(self.m, self.s)
+
+    def __gray_encoding(self, dec_in):
+        '''
+            Gray encoding
+        '''
+        bin_seq = [np.binary_repr(d, width=self.Nbits) for d in dec_in]
+        gray_out = []
+        for bin_i in bin_seq:
+            gray_vals = [
+                str(int(bin_i[idx])
+                    ^ int(bin_i[idx - 1])) if idx != 0 else bin_i[0]
+                for idx in range(0, len(bin_i))
+            ]
+            gray_i = "".join(gray_vals)
+            gray_out.append(int(gray_i, 2))
+        return gray_out
+
+    def __create_constellation(self, m, s):
+        '''
+            Create constellation
+        '''
+        n = int(np.log2(self.Nbits))
+        mg = self.__gray_encoding(m)
+        mgb = [np.binary_repr(d, width=n) for d in mg]
+        dict_out = {k: v for k, v in zip(mgb, s)}
+        return dict_out
+
+    def __qam_symbols(self):
+        '''
+            QAM symbols
+        '''
+        c = np.sqrt(self.Nbits)
+        b = -2 * (np.array(self.m) % c) + c - 1
+        a = 2 * np.floor(np.array(self.m) / c) - c + 1
+        s = list((a + 1j * b))
+        return s
 
     def generate_signal(self, data):
+        '''
+            Generate QAM signal
+            data: data to be transmitted on binary format
+        '''
         self.data = data
-        self.modulate = self.modem.modulate(data)
+        msg = data
+        n = int(np.log2(self.Nbits))
+
+        msg = [str(bit) for bit in msg]
+        splited = ["".join(msg[i:i + n])
+                   for i in range(0, len(msg), n)]  # subsequences of bits
+        self.modulate = [self.code_book[s] for s in splited]
 
         for i in range(len(self.modulate)):
             QAM = (self.modulate[i].real.ravel() *
@@ -36,25 +88,14 @@ class NewQam:
 
         return self.QAM_signal
 
-    def plot_constellation(self):
-        self.data = np.arange(2**self.Nbits)
-        self.data = self.data.reshape(-1, 1)
-        self.data = self.data.astype(complex)
-        self.data = self.data * np.exp(1j * 2 * np.pi * self.fCarrier * self.t)
-        plt.scatter(self.data.real, self.data.imag)
-        plt.show()
-
-    def plot_signal(self):
+    def plot_signal(self, figName='QAM signal'):
+        '''
+            Plot QAM signal
+        '''
         tt = np.arange(0, len(self.t) * len(self.modulate))
-
-        demodulate = self.modem.demodulate(self.modulate)
-        bits = self.modem.de2bin(demodulate)
-        x = [list(map(int, b)) for b in bits]
-        x = np.concatenate(x, axis=0)
-
         fig = plt.figure(figsize=(16, 4))
         plt.plot(tt, self.QAM_signal.real)
+        plt.title(f'{self.Nbits}-QAM of {figName}')
         plt.xlabel('time [s]')
-        plt.title(f'QAM={self.Nbits} of the sequence:' +
-                  np.array2string(np.transpose(x)))
+        plt.savefig(f'{self.Nbits}-QAM-{figName}.png')
         plt.show()
